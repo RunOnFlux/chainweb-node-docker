@@ -61,7 +61,6 @@ else
     if [[ "$file_lenght" -gt "10000000000" ]]; then
       echo "File lenght: $file_lenght"
     else
-		  echo "File lenght: $file_lenght"
       echo "File not exist! Source skipped..."
     fi
     retry=$(expr $retry + 1)
