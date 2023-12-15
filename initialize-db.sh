@@ -17,8 +17,8 @@ function with_backoff() {
       echo "Bootstrap downloaded creating $DBDIR"
       mkdir -p "$DBDIR"
       echo "Extracting bootstrap to $DBDIR"
-      tar -xzvf bootstrap.tar.gz -C "$DBDIR"
-      rm bootstrap.tar.gz
+      tar -xzvf /data/bootstrap.tar.gz -C "$DBDIR"
+      rm /data/bootstrap.tar.gz
       echo "Bootstrap extract finish"
       return 0
     else
@@ -83,7 +83,7 @@ else
     # Install database
     with_backoff curl --keepalive-time 30 \
       -C - \
-      -o bootstrap.tar.gz "${BOOTSTRAPLOCATIONS[$index]}"
+      -o /data/bootstrap.tar.gz "${BOOTSTRAPLOCATIONS[$index]}"
   else
     echo "None bootstrap was found, will download blockchain from node peers"
   fi
