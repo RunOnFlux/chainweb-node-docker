@@ -9,8 +9,8 @@ ARG UBUNTUVER=20.04
 
 FROM ubuntu:${UBUNTUVER}
 
-ARG REVISION=e363858
-ARG GHCVER=9.6.4
+ARG REVISION=89b0ac3
+ARG GHCVER=9.6.5
 ARG UBUNTUVER
 
 LABEL revision="$REVISION"
@@ -29,7 +29,7 @@ ENV LANG=en_US.UTF-8
 # Install chainweb applications
 WORKDIR /chainweb
 # RUN curl -Ls "https://github.com/kadena-io/chainweb-node/releases/download/<chaineweb-version>/<chainweb-binary-version>" | tar -xzC "/chainweb/"
-RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.false.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
+RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.true.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
 
 COPY check-reachability.sh .
 COPY run-chainweb-node.sh .
