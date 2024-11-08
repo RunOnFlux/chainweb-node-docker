@@ -5,12 +5,12 @@
 # --ulimit nofile=64000:64000
 
 # BUILD PARAMTERS
-ARG UBUNTUVER=20.04
+ARG UBUNTUVER=22.04
 
 FROM ubuntu:${UBUNTUVER}
 
-ARG REVISION=14ca523
-ARG GHCVER=9.6.5
+ARG REVISION=40f49aa
+ARG GHCVER=9.8.2
 ARG UBUNTUVER
 
 LABEL revision="$REVISION"
@@ -19,7 +19,7 @@ LABEL ubuntu="$UBUNTUVER"
 
 # install prerequisites
 RUN apt-get update \
-    && apt-get install -y libtbb2 libgflags2.2 libsnappy1v5 curl xxd openssl binutils locales jq \
+    && apt-get install -y ca-certificates libgmp10 libssl3 libsnappy1v5 zlib1g liblz4-1 libbz2-1.0 libgflags2.2 zstd locales curl jq \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8 \
     && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
