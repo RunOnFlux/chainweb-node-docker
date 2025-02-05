@@ -19,7 +19,7 @@ LABEL ubuntu="$UBUNTUVER"
 
 # install prerequisites
 RUN apt-get update \
-    && apt-get install -y ca-certificates libgmp10 libssl3 libsnappy1v5 zlib1g liblz4-1 libbz2-1.0 libgflags2.2 zstd locales curl jq \
+    && apt-get install -y xxd openssl binutils libtbb2 libmpfr6 ca-certificates libgmp10 libssl3 libsnappy1v5 zlib1g liblz4-1 libbz2-1.0 libgflags2.2 zstd locales curl jq \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8 \
     && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
