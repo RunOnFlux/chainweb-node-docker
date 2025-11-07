@@ -29,7 +29,8 @@ ENV LANG=en_US.UTF-8
 # Install chainweb applications
 WORKDIR /chainweb
 # RUN curl -Ls "https://github.com/kadena-io/chainweb-node/releases/download/<chaineweb-version>/<chainweb-binary-version>" | tar -xzC "/chainweb/"
-RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.true.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
+# RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.true.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
+RUN curl -Ls "https://github.com/kda-community/chainweb-node/releases/download/3.0/chainweb-3.0.ghc-9.8.2.ubuntu-22.04.ade0394.tar.gz" | tar -xzC "/"
 
 COPY check-reachability.sh .
 COPY run-chainweb-node.sh .
