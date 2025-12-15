@@ -1,12 +1,41 @@
+# Chainweb Node Configuration (Compacted Database)
+# Optimized for Flux deployment with reduced storage requirements
+
 databaseDirectory: /data/chainweb-db
 resetChainDatabases: false
+
+# IMPORTANT: Required for compacted database snapshots
+fullHistoricPactState: false
+
 chainweb:
+  chainwebVersion: mainnet01
+
+  # P2P network settings
+  p2p:
+    peer:
+      interface: '*'
+      hostaddress:
+        hostname: "0.0.0.0"
+        port: 1789
+      certificateChain: null
+      certificateChainFile: null
+      key: null
+      keyFile: null
+    peerDbFilePath: null
+    maxPeerCount: 1000
+    maxSessionCount: 10
+    sessionTimeout: 300
+    private: false
+    ignoreBootstrapNodes: false
+
+  # Rate limiting
   throttling:
     local: 10
     mining: 10
     global: 1000
     putPeer: 30
-  chainwebVersion: mainnet01
+
+  # Mining configuration (disabled by default, enable via env vars)
   mining:
     coordination:
       enabled: false
@@ -15,27 +44,11 @@ chainweb:
       miners: []
     nodeMining:
       enabled: false
-  p2p:
-    peerDbFilePath: null
-    peer:
-      certificateChainFile: null
-      key: null
-      interface: '*'
-      certificateChain: null
-      hostaddress:
-        hostname: "0.0.0.0"
-        port: 443
-      keyFile: null
-    maxPeerCount: 1000
-    private: false
-    ignoreBootstrapNodes: false
-    maxSessionCount: 8
-    sessionTimeout: 300
+
+  # Transaction and mempool settings
   transactionIndex:
     enabled: true
     configuration: {}
-  headerStream: true
-  allowReadsInLocal: true
   mempoolP2p:
     enabled: true
     configuration:
@@ -43,11 +56,20 @@ chainweb:
       maxSessionCount: 6
       sessionTimeout: 300
   reintroTxs: true
+
+  # Chain database settings
   cuts:
-    pruneChainDatabase: true
+    # IMPORTANT: Must be disabled for compacted database snapshots
+    pruneChainDatabase: none
     fetchTimeout: 50000000
     initialCutHeightLimit: null
-  rosetta: true
+
+  # API features
+  headerStream: true
+  allowReadsInLocal: true
+  rosetta: false
+
+# Logging configuration
 logging:
   telemetryBackend:
     enabled: true
@@ -67,9 +89,7 @@ logging:
     scope: []
     exception_limit: 10
     policy: discard
-  clusterId: docker-node
-  amberdataBackend:
-    enabled: false
   filter:
     rules: []
-    default: debug
+    default: warn
+  clusterId: flux-chainweb-node

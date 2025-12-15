@@ -1,79 +1,88 @@
 #!/usr/bin/env bash
+set -e
 
-# Retries a command a configurable number of times with backoff.
-#
-# The retry count is given by ATTEMPTS (default 5), the initial backoff
-# timeout is given by TIMEOUT in seconds (default 1.)
-#
-# Successive backoffs double the timeout.
-function with_backoff() {
-  local max_attempts=${ATTEMPTS-5}
-  local timeout=${TIMEOUT-1}
-  local attempt=1
-  local exitCode=0
+# Initialize Chainweb database with compacted snapshot from chainweb-community.org
+# The compacted database is ~44GB vs ~450GB for full database
 
-  while (($attempt < $max_attempts)); do
-    if "$@"; then
-      echo "Bootstrap downloaded creating $DBDIR"
-      mkdir -p "$DBDIR"
-      echo "Extracting bootstrap to $DBDIR"
-      tar -xzvf /data/bootstrap.tar.gz -C "$DBDIR"
-      rm /data/bootstrap.tar.gz
-      echo "Bootstrap extract finish"
-      return 0
-    else
-      exitCode=$?
-    fi
+DBDIR="/data/chainweb-db"
+SNAPSHOT_BASE_URL="${SNAPSHOT_BASE_URL:-https://snapshots.chainweb-community.org/snapshots/compacted}"
+SNAPSHOT_RSYNC="${SNAPSHOT_RSYNC:-rsync://snapshots.chainweb-community.org/snapshots/compacted}"
 
-    echo "Failure! Retrying in $timeout.." 1>&2
-    sleep $timeout
-    attempt=$((attempt + 1))
-    timeout=$((timeout * 2))
-  done
+# Get snapshot date (default to today, fallback to yesterday)
+get_snapshot_date() {
+    local today=$(date -u +%Y-%m-%d)
+    local yesterday=$(date -u -d "yesterday" +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
 
-  if [[ $exitCode != 0 ]]; then
-    rm -rf /data/chainweb-db/
-    echo "Failed for the last time! ($@)" 1>&2
-  fi
+    # Try today first, then yesterday
+    for date in "$today" "$yesterday"; do
+        if curl -sfI "${SNAPSHOT_BASE_URL}/${date}/rocksDb/" >/dev/null 2>&1; then
+            echo "$date"
+            return 0
+        fi
+    done
 
-  return $exitCode
+    # Default to today if checks fail
+    echo "$today"
 }
 
-DBDIR="/data/chainweb-db/0"
-# Double check if dbdir already exists, only download bootstrap if it doesn't
-if [ -d $DBDIR ]; then
-  echo "Directory $DBDIR already exists, we will not download any bootstrap, if you want to download the bootstrap you need to delete chainweb-db folder first"
+# Check if database already exists
+if [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ]; then
+    echo "Database already exists at $DBDIR/0"
+    echo "Delete /data/chainweb-db to re-download"
+    exit 0
+fi
+
+echo "=== Chainweb Compacted Database Initialization ==="
+echo "Target directory: $DBDIR"
+
+# Get available snapshot date
+SNAPSHOT_DATE=$(get_snapshot_date)
+echo "Using snapshot date: $SNAPSHOT_DATE"
+
+mkdir -p "$DBDIR"
+cd "$DBDIR"
+
+# Try rsync first (more reliable for large files)
+echo "Attempting rsync download..."
+if rsync -avz --progress "${SNAPSHOT_RSYNC}/${SNAPSHOT_DATE}/" . 2>/dev/null; then
+    echo "Rsync download completed successfully"
 else
-  echo "$DBDIR does not exists, lets download the bootstrap"
-  # Getting Kadena bootstrap from Flux Servers
-  BOOTSTRAPLOCATIONS[0]="http://176.9.51.184:16127/apps/fluxshare/getfile/kda_bootstrap.tar.gz?token=fbb8fd41babd63052cc7f45e31b6c84a7bdc935ee7266ca3bd297c8801940a97"
-  BOOTSTRAPLOCATIONS[1]="http://176.9.51.185:16127/apps/fluxshare/getfile/kda_bootstrap.tar.gz?token=624152edfc15c3c81d68303605e8a035a211cb99012c176c5661478202455e73"
-  BOOTSTRAPLOCATIONS[2]="http://176.9.51.186:16127/apps/fluxshare/getfile/kda_bootstrap.tar.gz?token=4c1427e81900cf4634e9a17009845053cc3383ac0c8fcc985d17f8488788f126"
-  
-  retry=0
-  file_lenght=0
-  while [[ "$file_lenght" -lt "10000000000" && "$retry" -lt 6 ]]; do
-    index=$(shuf -i 0-2 -n 1)
-    echo "Testing bootstrap location ${BOOTSTRAPLOCATIONS[$index]}"
-    file_lenght=$(curl -sI -m 5 ${BOOTSTRAPLOCATIONS[$index]} | egrep 'Content-Length|content-length' | sed 's/[^0-9]*//g')
+    echo "Rsync failed, falling back to HTTPS download..."
 
-    if [[ "$file_lenght" -gt "10000000000" ]]; then
-      echo "File lenght: $file_lenght"
-    else
-      echo "File not exist! Source skipped..."
-    fi
-    retry=$(expr $retry + 1)
-  done
+    # Download rocksDb
+    echo "Downloading rocksDb..."
+    mkdir -p rocksDb
 
+    # Get list of rocksDb files and download
+    for file in $(curl -sf "${SNAPSHOT_BASE_URL}/${SNAPSHOT_DATE}/rocksDb/" | grep -oP 'href="\K[^"]+\.tar\.zst' | sort -u); do
+        echo "Downloading rocksDb/${file}..."
+        curl -fSL "${SNAPSHOT_BASE_URL}/${SNAPSHOT_DATE}/rocksDb/${file}" -o "rocksDb/${file}"
+        echo "Extracting ${file}..."
+        zstd -d "rocksDb/${file}" -o "rocksDb/${file%.zst}" && rm "rocksDb/${file}"
+        tar -xf "rocksDb/${file%.zst}" -C rocksDb/ && rm "rocksDb/${file%.zst}"
+    done
 
-  if [[ "$file_lenght" -gt "10000000000" ]]; then
-    echo "Bootstrap location valid"
-    echo "Downloading bootstrap"
-    # Install database
-    with_backoff curl --keepalive-time 30 \
-      -C - \
-      -o /data/bootstrap.tar.gz "${BOOTSTRAPLOCATIONS[$index]}"
-  else
-    echo "None bootstrap was found, will download blockchain from node peers"
-  fi
+    # Download sqlite
+    echo "Downloading sqlite..."
+    mkdir -p sqlite
+
+    for file in $(curl -sf "${SNAPSHOT_BASE_URL}/${SNAPSHOT_DATE}/sqlite/" | grep -oP 'href="\K[^"]+\.tar\.zst' | sort -u); do
+        echo "Downloading sqlite/${file}..."
+        curl -fSL "${SNAPSHOT_BASE_URL}/${SNAPSHOT_DATE}/sqlite/${file}" -o "sqlite/${file}"
+        echo "Extracting ${file}..."
+        zstd -d "sqlite/${file}" -o "sqlite/${file%.zst}" && rm "sqlite/${file}"
+        tar -xf "sqlite/${file%.zst}" -C sqlite/ && rm "sqlite/${file%.zst}"
+    done
+fi
+
+# Verify download
+if [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ]; then
+    echo "=== Database initialization complete ==="
+    echo "RocksDB size: $(du -sh $DBDIR/0/rocksDb 2>/dev/null | cut -f1)"
+    echo "SQLite size: $(du -sh $DBDIR/0/sqlite 2>/dev/null | cut -f1)"
+    echo "Total size: $(du -sh $DBDIR/0 2>/dev/null | cut -f1)"
+else
+    echo "ERROR: Database initialization failed"
+    echo "Expected directories $DBDIR/0/rocksDb and $DBDIR/0/sqlite not found"
+    exit 1
 fi

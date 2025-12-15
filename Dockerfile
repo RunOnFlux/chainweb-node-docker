@@ -1,51 +1,72 @@
-# syntax=docker/dockerfile:experimental
-
-# Run as
+# Chainweb Node Docker Image (Compacted Database)
+# Optimized for Flux deployment with minimal storage requirements
 #
-# --ulimit nofile=64000:64000
+# Run with: --ulimit nofile=65536:65536
 
-# BUILD PARAMTERS
 ARG UBUNTUVER=22.04
 
 FROM ubuntu:${UBUNTUVER}
 
-ARG REVISION=d7aee70
+ARG CHAINWEB_VERSION=3.0.1
 ARG GHCVER=9.8.2
+ARG REVISION=e60dd0f
 ARG UBUNTUVER
 
-LABEL revision="$REVISION"
-LABEL ghc="$GHCVER"
-LABEL ubuntu="$UBUNTUVER"
+LABEL maintainer="RunOnFlux"
+LABEL chainweb.version="${CHAINWEB_VERSION}"
+LABEL ghc.version="${GHCVER}"
+LABEL ubuntu.version="${UBUNTUVER}"
 
-# install prerequisites
+# Install runtime dependencies + nginx for dashboard
 RUN apt-get update \
-    && apt-get install -y xxd openssl binutils libtbb2 libmpfr6 ca-certificates libgmp10 libssl3 libsnappy1v5 zlib1g liblz4-1 libbz2-1.0 libgflags2.2 zstd locales curl jq \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        jq \
+        rsync \
+        openssl \
+        xxd \
+        locales \
+        libtbb2 \
+        libmpfr6 \
+        libgmp10 \
+        libssl3 \
+        libsnappy1v5 \
+        zlib1g \
+        liblz4-1 \
+        libbz2-1.0 \
+        libgflags2.2 \
+        zstd \
+        nginx \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8 \
     && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 
 ENV LANG=en_US.UTF-8
 
-# Install chainweb applications
+# Install chainweb-node binary
 WORKDIR /chainweb
-# RUN curl -Ls "https://github.com/kadena-io/chainweb-node/releases/download/<chaineweb-version>/<chainweb-binary-version>" | tar -xzC "/chainweb/"
-# RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.true.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
-RUN curl -Ls "https://github.com/kda-community/chainweb-node/releases/download/3.0/chainweb-3.0.ghc-9.8.2.ubuntu-22.04.ade0394.tar.gz" | tar -xzC "/chainweb/"
+RUN curl -fsSL "https://github.com/kda-community/chainweb-node/releases/download/${CHAINWEB_VERSION}/chainweb-${CHAINWEB_VERSION}.ghc-${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" \
+    | tar -xzC "/chainweb/"
 
-COPY check-reachability.sh .
-COPY run-chainweb-node.sh .
-COPY initialize-db.sh .
-COPY chainweb.yaml .
-COPY check-health.sh .
-RUN chmod 755 check-reachability.sh run-chainweb-node.sh initialize-db.sh check-health.sh
-RUN mkdir -p /data/chainweb-db
-RUN mkdir -p /root/.local/share/chainweb-node/mainnet01/
+# Copy scripts and config
+COPY initialize-db.sh run-chainweb-node.sh check-health.sh check-reachability.sh chainweb.yaml start.sh ./
+RUN chmod 755 initialize-db.sh run-chainweb-node.sh check-health.sh check-reachability.sh start.sh
+
+# Copy dashboard
+COPY dashboard/ /var/www/html/
+COPY nginx.conf /etc/nginx/sites-available/default
+RUN chmod 644 /var/www/html/*.html
+
+# Create data directories
+RUN mkdir -p /data/chainweb-db/0
 
 STOPSIGNAL SIGTERM
-EXPOSE 443
-EXPOSE 80
-EXPOSE 1789
-EXPOSE 1848
-HEALTHCHECK --start-period=10m --interval=1m --retries=5 --timeout=10s CMD ./check-health.sh
 
-CMD ./run-chainweb-node.sh
+# Default ports: P2P, Service API, Dashboard
+EXPOSE 1789 1848 8080
+
+HEALTHCHECK --start-period=15m --interval=1m --retries=5 --timeout=15s \
+    CMD ./check-health.sh
+
+CMD ["./start.sh"]

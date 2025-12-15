@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kadena Node // Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-darkest: #0d0d0d;
+            --bg-dark: #141414;
+            --bg-mid: #1a1a1a;
+            --bg-light: #222222;
+            --bg-lighter: #2a2a2a;
+            --border: #333333;
+            --border-light: #444444;
+            --text-bright: #ffffff;
+            --text-main: #cccccc;
+            --text-dim: #888888;
+            --text-muted: #555555;
+            --neon: #00ff88;
+            --neon-dim: #00cc6a;
+            --neon-glow: rgba(0, 255, 136, 0.4);
+            --neon-subtle: rgba(0, 255, 136, 0.1);
+            --warning: #ffaa00;
+            --error: #ff4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg-darkest);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Scanline effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1) 0px,
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.3;
+        }
+
+        /* Grid background */
+        .bg-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(var(--neon-subtle) 1px, transparent 1px),
+                linear-gradient(90deg, var(--neon-subtle) 1px, transparent 1px);
+            background-size: 60px 60px;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        /* Terminal-style header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding: 20px 24px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--neon);
+            position: relative;
+        }
+
+        header::before {
+            content: '>';
+            position: absolute;
+            left: -24px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--neon);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 18px;
+            animation: blink-cursor 1s step-end infinite;
+        }
+
+        @keyframes blink-cursor {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-box {
+            width: 48px;
+            height: 48px;
+            border: 2px solid var(--neon);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 24px;
+            color: var(--neon);
+            text-shadow: 0 0 10px var(--neon-glow);
+            box-shadow: 0 0 20px var(--neon-glow), inset 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+
+        .logo-text h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-bright);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        .logo-text span {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            color: var(--neon);
+            letter-spacing: 2px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 14px;
+        }
+
+        .status-led {
+            width: 12px;
+            height: 12px;
+            background: var(--neon);
+            box-shadow: 0 0 10px var(--neon-glow), 0 0 20px var(--neon-glow);
+            animation: pulse-led 2s ease-in-out infinite;
+        }
+
+        .status-led.offline {
+            background: var(--error);
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+        }
+
+        .status-led.syncing {
+            background: var(--warning);
+            box-shadow: 0 0 10px rgba(255, 170, 0, 0.5);
+        }
+
+        @keyframes pulse-led {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .status-text {
+            color: var(--neon);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-text.offline { color: var(--error); }
+        .status-text.syncing { color: var(--warning); }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            padding: 20px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .stat-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--neon), transparent);
+        }
+
+        .stat-box:hover {
+            border-color: var(--neon);
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.1);
+        }
+
+        .stat-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 32px;
+            color: var(--neon);
+            text-shadow: 0 0 20px var(--neon-glow);
+            line-height: 1;
+        }
+
+        .stat-value.small {
+            font-size: 22px;
+        }
+
+        .stat-sub {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 8px;
+        }
+
+        /* Main grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 16px;
+        }
+
+        .panel {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-mid);
+        }
+
+        .panel-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--text-bright);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: '//';
+            color: var(--neon);
+        }
+
+        .live-badge {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--neon);
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid var(--neon);
+            padding: 4px 10px;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--neon);
+            animation: pulse-led 1s ease-in-out infinite;
+        }
+
+        .panel-body {
+            padding: 20px;
+        }
+
+        /* Chains grid */
+        .chains-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+
+        .chain-cell {
+            background: var(--bg-mid);
+            border: 1px solid var(--border);
+            padding: 12px 8px;
+            text-align: center;
+            transition: all 0.15s ease;
+            cursor: default;
+        }
+
+        .chain-cell:hover {
+            border-color: var(--neon);
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .chain-cell.active {
+            border-color: var(--neon);
+            box-shadow: 0 0 10px var(--neon-glow);
+        }
+
+        .chain-id {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .chain-height {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--neon);
+            margin-bottom: 2px;
+        }
+
+        .chain-hash {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            color: var(--text-dim);
+        }
+
+        /* Info list */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s ease;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-row:hover {
+            background: var(--bg-mid);
+        }
+
+        .info-key {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .info-val {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--text-bright);
+        }
+
+        .info-val.highlight {
+            color: var(--neon);
+            text-shadow: 0 0 10px var(--neon-glow);
+        }
+
+        .info-val.warning {
+            color: var(--warning);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 24px;
+            padding: 16px 20px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-link {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.2s ease;
+        }
+
+        .footer-link:hover {
+            color: var(--neon);
+        }
+
+        .footer-time {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Error */
+        .error-bar {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            border-left: 3px solid var(--error);
+            padding: 14px 20px;
+            margin-bottom: 16px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--error);
+            display: none;
+        }
+
+        .error-bar.show {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 1100px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .stats-row { grid-template-columns: 1fr; }
+            .chains-grid { grid-template-columns: repeat(4, 1fr); }
+            header { flex-direction: column; gap: 16px; text-align: center; }
+            header::before { display: none; }
+            .logo-section { flex-direction: column; }
+        }
+
+        /* Glitch effect for title */
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 1px); }
+            94% { transform: translate(2px, -1px); }
+            96% { transform: translate(-1px, -1px); }
+            98% { transform: translate(1px, 1px); }
+        }
+
+        .logo-text h1:hover {
+            animation: glitch 0.3s ease infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo-section">
+                <div class="logo-box">K</div>
+                <div class="logo-text">
+                    <h1>Kadena Node</h1>
+                    <span>[ chainweb_dashboard ]</span>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <div class="status-led" id="statusLed"></div>
+                <span class="status-text" id="statusText">INIT...</span>
+            </div>
+        </header>
+
+        <div class="error-bar" id="errorBar">ERROR: Connection failed</div>
+
+        <div class="stats-row">
+            <div class="stat-box">
+                <div class="stat-label">Block Height</div>
+                <div class="stat-value" id="blockHeight">---</div>
+                <div class="stat-sub" id="heightSub">loading...</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Peers</div>
+                <div class="stat-value" id="peers">---</div>
+                <div class="stat-sub" id="peersSub">connected</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Last Block</div>
+                <div class="stat-value small" id="lastBlock">---</div>
+                <div class="stat-sub" id="lastBlockSub">ago</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Network</div>
+                <div class="stat-value small" id="network">---</div>
+                <div class="stat-sub" id="chains">-- chains</div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Chain Matrix</span>
+                    <div class="live-badge">
+                        <div class="live-dot"></div>
+                        LIVE
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="chains-grid" id="chainsGrid"></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Node Info</span>
+                </div>
+                <div class="info-list">
+                    <div class="info-row">
+                        <span class="info-key">Version</span>
+                        <span class="info-val highlight" id="version">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">API Version</span>
+                        <span class="info-val" id="api">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">Service Date</span>
+                        <span class="info-val" id="serviceDate">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">Cut Weight</span>
+                        <span class="info-val" id="weight">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">P2P Port</span>
+                        <span class="info-val" id="p2pPort">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">Service Port</span>
+                        <span class="info-val" id="svcPort">---</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-key">Database</span>
+                        <span class="info-val highlight">COMPACTED</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-links">
+                <a href="/health-check" class="footer-link">/health</a>
+                <a href="/info" class="footer-link">/info</a>
+                <a href="/chainweb/0.0/mainnet01/cut" class="footer-link">/cut</a>
+            </div>
+            <span class="footer-time" id="lastUpdate">--:--:--</span>
+        </footer>
+    </div>
+
+    <script>
+        // State
+        let prevCut = null;
+        let lastBlockTime = null;
+        let nodeInfo = null;
+
+        // Format number with commas
+        function fmt(n) {
+            return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        // Format time ago
+        function timeAgo(seconds) {
+            if (seconds < 60) return Math.floor(seconds) + 's';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+            return Math.floor(seconds / 86400) + 'd ' + Math.floor((seconds % 86400) / 3600) + 'h';
+        }
+
+        // Set status indicator
+        function setStatus(status, text) {
+            const led = document.getElementById('statusLed');
+            const txt = document.getElementById('statusText');
+            led.className = 'status-led' + (status !== 'online' ? ' ' + status : '');
+            txt.className = 'status-text' + (status !== 'online' ? ' ' + status : '');
+            txt.textContent = text;
+        }
+
+        // Show/hide error
+        function showError(msg) {
+            const el = document.getElementById('errorBar');
+            el.textContent = 'ERROR: ' + msg;
+            el.classList.add('show');
+        }
+
+        function hideError() {
+            document.getElementById('errorBar').classList.remove('show');
+        }
+
+        // Fetch node info
+        async function getInfo() {
+            try {
+                const r = await fetch('/info');
+                nodeInfo = await r.json();
+
+                document.getElementById('version').textContent = 'v' + nodeInfo.nodePackageVersion;
+                document.getElementById('api').textContent = nodeInfo.nodeApiVersion;
+                document.getElementById('network').textContent = nodeInfo.nodeVersion.toUpperCase();
+                document.getElementById('chains').textContent = nodeInfo.nodeNumberOfChains + ' chains';
+
+                if (nodeInfo.nodeServiceDate) {
+                    const sd = new Date(nodeInfo.nodeServiceDate);
+                    document.getElementById('serviceDate').textContent = sd.toLocaleDateString();
+                }
+            } catch(e) {
+                console.error('Info error:', e);
+            }
+        }
+
+        // Fetch cut data (block heights per chain)
+        async function getCut() {
+            try {
+                const r = await fetch('/chainweb/0.0/mainnet01/cut');
+                const cut = await r.json();
+
+                // Total height across all chains
+                document.getElementById('blockHeight').textContent = fmt(cut.height);
+
+                // Calculate blocks per minute if we have previous data
+                if (prevCut && prevCut.height < cut.height) {
+                    const diff = cut.height - prevCut.height;
+                    // We poll every 10 seconds, so multiply by 6 for per-minute rate
+                    const rate = Math.round(diff * 6);
+                    document.getElementById('heightSub').textContent = '~' + rate + ' blk/min';
+                } else {
+                    document.getElementById('heightSub').textContent = 'total across chains';
+                }
+                prevCut = cut;
+
+                // Cut weight (truncate for display)
+                if (cut.weight) {
+                    document.getElementById('weight').textContent = cut.weight.substring(0, 16) + '...';
+                }
+
+                renderChains(cut.hashes);
+                return cut;
+            } catch(e) {
+                console.error('Cut error:', e);
+                return null;
+            }
+        }
+
+        // Render chain matrix
+        function renderChains(hashes) {
+            const grid = document.getElementById('chainsGrid');
+            if (!hashes) return;
+
+            const ids = Object.keys(hashes).sort((a, b) => +a - +b);
+            grid.innerHTML = ids.map(id => {
+                const chain = hashes[id];
+                const height = chain.height || 0;
+                const hash = chain.hash || '--------';
+                return `
+                    <div class="chain-cell" title="Hash: ${hash}">
+                        <div class="chain-id">CHAIN ${id}</div>
+                        <div class="chain-height">${fmt(height)}</div>
+                        <div class="chain-hash">${hash.substring(0, 8)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Get latest block header for timestamp (using hash from cut)
+        async function getLatestBlockTime(cut) {
+            try {
+                // Use hash from chain 0 in the cut data
+                if (!cut || !cut.hashes || !cut.hashes['0']) {
+                    return null;
+                }
+
+                const hash = cut.hashes['0'].hash;
+                const r = await fetch(`/chainweb/0.0/mainnet01/chain/0/header/${hash}`, {
+                    headers: {
+                        'Accept': 'application/json;blockheader-encoding=object'
+                    }
+                });
+                const header = await r.json();
+
+                if (header && header.creationTime) {
+                    // creationTime is in microseconds
+                    const creationTime = header.creationTime / 1000000;
+                    lastBlockTime = creationTime;
+                    return creationTime;
+                }
+            } catch(e) {
+                console.error('Header error:', e);
+            }
+            return null;
+        }
+
+        // Get peer count
+        async function getPeers() {
+            try {
+                // Try P2P proxy first
+                const r = await fetch('/p2p/chainweb/0.0/mainnet01/cut/peer?limit=100');
+                const data = await r.json();
+
+                if (data.items && Array.isArray(data.items)) {
+                    const count = data.items.length;
+                    document.getElementById('peers').textContent = count;
+                    document.getElementById('peersSub').textContent = count > 0 ? 'connected peers' : 'no peers';
+                    return count;
+                }
+            } catch(e) {
+                console.error('Peers error:', e);
+                document.getElementById('peers').textContent = '?';
+                document.getElementById('peersSub').textContent = 'unavailable';
+            }
+            return 0;
+        }
+
+        // Health check
+        async function checkHealth() {
+            try {
+                const r = await fetch('/health-check');
+                const t = await r.text();
+                if (t.includes('OK')) {
+                    return true;
+                }
+                return false;
+            } catch(e) {
+                return false;
+            }
+        }
+
+        // Update last block time display
+        function updateLastBlockDisplay() {
+            if (lastBlockTime) {
+                const now = Date.now() / 1000;
+                const age = now - lastBlockTime;
+                document.getElementById('lastBlock').textContent = timeAgo(age);
+                document.getElementById('lastBlockSub').textContent = 'since last block';
+
+                // Update status based on block age
+                if (age < 60) {
+                    setStatus('online', 'SYNCED');
+                    hideError();
+                } else if (age < 300) {
+                    setStatus('syncing', 'SYNCING');
+                } else {
+                    setStatus('syncing', 'CATCHING UP');
+                }
+            }
+        }
+
+        // Set port info
+        function setPortInfo() {
+            const dashPort = window.location.port || '31350';
+            const svcPort = parseInt(dashPort) + 1;
+            const p2pPort = parseInt(dashPort) + 2;
+            document.getElementById('svcPort').textContent = svcPort;
+            document.getElementById('p2pPort').textContent = p2pPort;
+        }
+
+        // Update timestamp
+        function updateTimestamp() {
+            document.getElementById('lastUpdate').textContent =
+                'Updated: ' + new Date().toLocaleTimeString();
+        }
+
+        // Main refresh function
+        async function refresh() {
+            const healthy = await checkHealth();
+
+            if (!healthy) {
+                setStatus('offline', 'OFFLINE');
+                showError('Node health check failed');
+                return;
+            }
+
+            // Fetch info and peers in parallel with cut
+            const [, cut] = await Promise.all([
+                getInfo(),
+                getCut(),
+                getPeers()
+            ]);
+
+            // Get block time using hash from cut
+            if (cut) {
+                await getLatestBlockTime(cut);
+            }
+
+            updateLastBlockDisplay();
+            updateTimestamp();
+        }
+
+        // Initialize
+        function init() {
+            // Set port info
+            setPortInfo();
+
+            // Render placeholder chains
+            const grid = document.getElementById('chainsGrid');
+            grid.innerHTML = Array(20).fill(0).map((_, i) =>
+                `<div class="chain-cell">
+                    <div class="chain-id">CHAIN ${i}</div>
+                    <div class="chain-height">---</div>
+                    <div class="chain-hash">--------</div>
+                </div>`
+            ).join('');
+
+            // Initial refresh
+            refresh();
+
+            // Refresh every 10 seconds
+            setInterval(refresh, 10000);
+
+            // Update last block time every second for smoother display
+            setInterval(updateLastBlockDisplay, 1000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
