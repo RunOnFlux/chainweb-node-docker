@@ -23,11 +23,11 @@ sed -i "s/listen 8080/listen ${DASHBOARD_PORT}/g; s/listen \[::\]:8080/listen [:
 echo "Starting dashboard server on port $DASHBOARD_PORT..."
 nginx
 
-# Check if database exists, initialize if not
-if [ -d /data/chainweb-db/0/rocksDb ]; then
+# Check if database exists and is complete, initialize if not
+if [ -f /data/chainweb-db/.download_complete ] && [ -d /data/chainweb-db/0/rocksDb ]; then
     echo "Database found, starting node..."
 else
-    echo "Database not found, initializing..."
+    echo "Database not found or incomplete, initializing..."
     ./initialize-db.sh
 fi
 
