@@ -27,7 +27,7 @@ docker run -d \
     -p 1848:1848 \
     -p 1789:1789 \
     -v chainweb-data:/data/chainweb-db \
-    runonflux/chainweb-node
+    runonflux/kadena-chainweb-node:fluxcloud-compacted
 ```
 
 On first start, the database is downloaded automatically (~15 minutes depending on connection speed).
@@ -45,7 +45,7 @@ docker run -d \
     -e CHAINWEB_SERVICE_PORT=31351 \
     -e CHAINWEB_P2P_PORT=31352 \
     -v chainweb-data:/data/chainweb-db \
-    runonflux/chainweb-node
+    runonflux/kadena-chainweb-node:fluxcloud-compacted
 ```
 
 ## Ports
