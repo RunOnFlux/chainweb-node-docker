@@ -10,7 +10,7 @@
     {
       "name": "chainweb",
       "description": "Kadena Chainweb Node v3.0.1 with dashboard. Dashboard (31350), Service API (31351), P2P (31352).",
-      "repotag": "runonflux/chainweb-node:latest",
+      "repotag": "runonflux/kadena-chainweb-node:fluxcloud-compacted",
       "ports": [31350, 31351, 31352],
       "containerPorts": [31350, 31351, 31352],
       "domains": ["", "", ""],
