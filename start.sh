@@ -17,7 +17,7 @@ echo "Dashboard Port: $DASHBOARD_PORT"
 # Update nginx config with correct ports
 sed -i "s/proxy_pass http:\/\/127.0.0.1:1848/proxy_pass http:\/\/127.0.0.1:${SERVICE_PORT}/g" /etc/nginx/sites-available/default
 sed -i "s/proxy_pass https:\/\/127.0.0.1:1789/proxy_pass https:\/\/127.0.0.1:${P2P_PORT}/g" /etc/nginx/sites-available/default
-sed -i "s/listen 8080/listen ${DASHBOARD_PORT}/g" /etc/nginx/sites-available/default
+sed -i "s/listen 8080/listen ${DASHBOARD_PORT}/g; s/listen \[::\]:8080/listen [::]:${DASHBOARD_PORT}/g" /etc/nginx/sites-available/default
 
 # Start nginx in background
 echo "Starting dashboard server on port $DASHBOARD_PORT..."

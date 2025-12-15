@@ -65,7 +65,7 @@ echo "Log Level: $LOGLEVEL"
 echo "Mining: ${MINER_KEY:+enabled}${MINER_KEY:-disabled}"
 echo "SQLite Compaction Height: ${SQLITE_COMPACTION:-unknown}"
 echo "RocksDB Compaction Height: ${ROCKSDB_COMPACTION:-unknown}"
-echo "Starting from height: ${COMPACTION_HEIGHT:-unknown}"
+echo "Base Compaction Height: ${COMPACTION_HEIGHT:-unknown}"
 
 # Build arguments array
 ARGS=(
@@ -80,11 +80,58 @@ ARGS=(
     --log-level="$LOGLEVEL"
 )
 
-# Add initial block height limit if we have a compaction height
-# This tells the node to start from a known point in the compacted database
-if [[ -n "$COMPACTION_HEIGHT" ]]; then
-    ARGS+=(--initial-block-height-limit="$COMPACTION_HEIGHT")
+# Compacted databases require initial-block-height-limit on every start
+# Check for saved height from previous run to resume where we left off
+LAST_HEIGHT_FILE="$DBDIR/.last_height"
+SAVED_HEIGHT=""
+if [ -f "$LAST_HEIGHT_FILE" ]; then
+    SAVED_HEIGHT=$(cat "$LAST_HEIGHT_FILE" 2>/dev/null | tr -d '[:space:]')
 fi
 
-# Run chainweb-node
-exec ./chainweb-node "${ARGS[@]}" +RTS -N -t -A64M -H500M -RTS "$@"
+# Use saved height if it's higher than compaction height, otherwise use compaction height
+START_HEIGHT="$COMPACTION_HEIGHT"
+if [[ -n "$SAVED_HEIGHT" ]] && [[ "$SAVED_HEIGHT" =~ ^[0-9]+$ ]] && [[ -n "$COMPACTION_HEIGHT" ]] && [[ "$SAVED_HEIGHT" -gt "$COMPACTION_HEIGHT" ]]; then
+    START_HEIGHT="$SAVED_HEIGHT"
+    echo "Resuming from saved height: $START_HEIGHT (was at compaction height $COMPACTION_HEIGHT)"
+fi
+
+if [[ -n "$START_HEIGHT" ]]; then
+    echo "Using compacted database, starting from height $START_HEIGHT"
+    ARGS+=(--initial-block-height-limit="$START_HEIGHT")
+fi
+
+# Background process to save current height periodically
+save_height() {
+    while true; do
+        sleep 300  # Save every 5 minutes
+        HEIGHT=$(curl -sf "http://127.0.0.1:${CHAINWEB_SERVICE_PORT}/chainweb/0.0/mainnet01/cut" 2>/dev/null | jq -r '.hashes."0".height // empty')
+        if [[ -n "$HEIGHT" ]] && [[ "$HEIGHT" =~ ^[0-9]+$ ]] && [[ "$HEIGHT" -gt 0 ]]; then
+            echo "$HEIGHT" > "$LAST_HEIGHT_FILE"
+        fi
+    done
+}
+
+# Start height saver in background
+save_height &
+HEIGHT_SAVER_PID=$!
+
+# Cleanup on exit - save final height
+cleanup() {
+    kill $HEIGHT_SAVER_PID 2>/dev/null
+    # Save final height on shutdown
+    HEIGHT=$(curl -sf "http://127.0.0.1:${CHAINWEB_SERVICE_PORT}/chainweb/0.0/mainnet01/cut" 2>/dev/null | jq -r '.hashes."0".height // empty')
+    if [[ -n "$HEIGHT" ]] && [[ "$HEIGHT" =~ ^[0-9]+$ ]] && [[ "$HEIGHT" -gt 0 ]]; then
+        echo "$HEIGHT" > "$LAST_HEIGHT_FILE"
+        echo "Saved height $HEIGHT on shutdown"
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# Run chainweb-node in foreground
+./chainweb-node "${ARGS[@]}" +RTS -N -t -A64M -H500M -RTS "$@" &
+NODE_PID=$!
+
+# Wait for node and propagate exit code
+wait $NODE_PID
+EXIT_CODE=$?
+exit $EXIT_CODE
