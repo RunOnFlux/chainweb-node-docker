@@ -1,0 +1,31 @@
+{
+  "version": 8,
+  "name": "kadenanode",
+  "description": "Kadena Chainweb Node (Compacted Database) - A full Kadena blockchain node with live dashboard. Uses compacted snapshots from chainweb-community.org (~44GB). Suitable for miners and API access. Initial bootstrap takes ~15 minutes.",
+  "owner": "YOUR_ZELID_HERE",
+  "instances": 3,
+  "staticip": false,
+  "enterprise": "",
+  "compose": [
+    {
+      "name": "chainweb",
+      "description": "Kadena Chainweb Node v3.0.1 with dashboard. Dashboard (31350), Service API (31351), P2P (31352).",
+      "repotag": "runonflux/chainweb-node:latest",
+      "ports": [31350, 31351, 31352],
+      "containerPorts": [31350, 31351, 31352],
+      "domains": ["", "", ""],
+      "environmentParameters": [
+        "DASHBOARD_PORT=31350",
+        "CHAINWEB_SERVICE_PORT=31351",
+        "CHAINWEB_P2P_PORT=31352",
+        "LOGLEVEL=warn"
+      ],
+      "commands": [],
+      "containerData": "/data",
+      "cpu": 4,
+      "ram": 4096,
+      "hdd": 80,
+      "tiered": false
+    }
+  ]
+}

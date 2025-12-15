@@ -1,350 +1,121 @@
-# Quick Setup
+# Chainweb Node Docker (Compacted Database)
 
-1.  *(Skip this step if you run the Chainweb node in data center.)* Log into your
-    router and configure port forwarding for port 1789 to your computer.
+Docker image for Kadena Chainweb node using compacted database snapshots from chainweb-community.org.
 
-2.  Make sure that your firewall allows incoming connection on port 1789.
+## Overview
 
-3.  Initialize database *(optional but saves several hours of db synchronization
-    on node startup.)*:
+This image runs chainweb-node v3.0.1 with a compacted database (~44GB) instead of the full database (~450GB). Includes a web dashboard and nginx reverse proxy.
 
-    First you need a database snapshot URL. See below, how to obtain a database
-    snapshot.
+## Requirements
 
-    ```sh
-    docker run -ti --rm -e DBURL=YOUR_DB_SNAPSHOT_URL -v chainweb-data:/data kadena/chainweb-node /chainweb/initialize-db.sh
-    ```
+- CPU: 4 cores
+- RAM: 4 GB
+- Storage: 80 GB SSD
+- Network: Public IP or port forwarding for P2P
 
-4.  Start Chainweb node:
+### Limitations
 
-    ```sh
-    docker run -d -p 1789:1789 -p 1848:1848 -v chainweb-data:/data kadena/chainweb-node
-    ```
+Compacted database does not include full historic Pact state. Some endpoints like `/pool` and `/spv` may not work. Suitable for mining and standard node operations.
 
-For explanations and additional configuration options (like, for instance, using
-an alternate port) keep reading.
+## Quick Start
 
-# Minimal System Requirements
-
-*   CPU: 2 cores
-*   RAM: 4 GB
-*   Storage: 50 GB of free space (it is recommend to use SSD disks)
-*   Network: public IP address or port forwarding
-
-For instance AWS EC2 t3a.medium VMs with 50GB SSD root storage are known to work.
-
-# Running a Chainweb Node as Docker Container
-
-A Chainweb node serves two separate APIs:
-
-1.  The P2P API includes all endpoints that are used for node-to-node
-    communication. It is served via HTTPS and must be reachable from the public
-    internet.
-
-2.  The Service API includes all routes that off Kadena chainweb services to
-    users and applications. It is served as plain (unencrypted) HTTP and can
-    kept private. It is also possible to use this API with a reverse proxy.
-
-More details about these APIs can be found further down in this document.
-
-**A Chainweb node must be reachable from the public internet**. It needs a
-public IP address and port. If you run the node from a data center, usually, you
-only have to ensure that it can be reached on the default P2P port *1789*. You can use
-the following shell command to start the node.
-
-```sh
-docker run -d -p 1848:1848 -p 1789:1789 kadena/chainweb-node
-```
-
-This exposes the P2P network on HTTPS port 1789 and the API services of chainweb
-node on HTTP port 1848.
-
-If you are running the node from a local network with NAT (network address
-translation), which is the case for most home networks, you'll have to configure
-port forwarding for the P2P port (1789) in your router.
-
-Using different ports is possible, too, as long as the internal and external
-port of the docker container match. For instance, the following command exposes
-the P2P network on port 443.
-
-```sh
-docker run -d -p 1848:1848 -p 443:443 -e "CHAINWEB_P2P_PORT=443" kadena/chainweb-node
-```
-
-More options to configure the node are described at the bottom of this document.
-
-Above command starts the node with an empty Chainweb database. It will take
-about 2-3 days until the node has "caught up" with the network, joined
-consensus, and can be used for mining and processing transactions.
-
-The startup time can be shortened to a few minutes by initializing the node with
-a pre-computed database. This is strongly encouraged and described further down
-in this document.
-
-# Initialize Chainweb Database
-
-When the container is started for the first time it has to synchronize and
-rebuild the Chainweb database from the P2P network. This can take a long time.
-Currently, as of 2021-02-17, this takes about 2-3 days for a node in a well
-connected data center.
-
-The container includes a script for synchronizing a pre-build database, which
-currently, as of 2021-02-17, involves downloading about 15GB of data.
-
-A database snapshot is just a gzipped tar archive of the Chainweb database,
-which contains the subdirectories `rocksDb` and `sqlite`. The URL can point to
-remote location or a local file. Any URL that curl understands is fine.
-
-Database snapshots are available from different sources. Kadena offers an
-up-to-date snapshot at
-https://kadena-node-db.s3.us-east-2.amazonaws.com/db-chainweb-node-ubuntu.18.04-latest.tar.gz.
-This file is stored in a request-pays S3 bucket. In order to access it you need
-an AWS account and you must create and signed URL for authenticating with S3.
-Details about how to do this can be found here:
-https://docs.aws.amazon.com/AmazonS3/latest/userguide/ObjectsinRequesterPaysBuckets.html
-
-With `node.js` you can create a signed URL for above snapshot URL as follows:
-
-```js
-// get-chainweb-image-url.js
-AWS = require("aws-sdk");
-const s3 = new AWS.S3({
-  accessKeyId: AWS_ACCESS_KEY_ID, // Add your Access Key ID from IAM
-  secretAccessKey: AWS_SECRET_ACCESS_KEY, // Add your Secret Access Key from IAM
-  region: "us-east-2"
-})
-const params = {
-  Bucket: 'kadena-node-db',
-  Expires: 3600,
-  Key: 'db-chainweb-node-ubuntu.18.04-latest.tar.gz',
-  RequestPayer: 'requester'
-}
-// When ran, the script will output exclusively the signed url
-s3.getSignedUrl("getObject", params, (_err, res) => console.log(res))
-```
-
-With Python one can use the following code:
-
-```python
-import boto3
-client = boto3.client('s3')
-url  = client.generate_presigned_url(
-    "get_object",
-    Params = {
-        "Bucket":"kadena-node-db",
-        "Key":"db-chainweb-node-ubuntu.18.04-latest.tar.gz",
-        "RequestPayer":'requester'
-    }
-)
-```
-
-### Database within Chainweb node container
-
-The following shell commands initializes a docker container with a database and
-creates a new image from it.
-
-```sh
-npm install aws-sdk
-YOUR_DB_SNAPSHOT_URL=$(node get-chainweb-image-url.js) # assuming you use get-chainweb-image-url.js form above
-docker run -ti --name initialize-chainweb-db -e DBURL=$YOUR_DB_SNAPSHOT_URL kadena/chainweb-node /chainweb/initialize-db.sh
-docker commit `docker ps -a -f 'name=initialize-chainweb-db' -q` chainweb-node-with-db
-docker rm initialize-chainweb-db
-```
-
-Once the database is initialized the image can be used to run a Chainweb node as
-follows:
-
-```sh
-docker run \
-    --detach \
-    --publish 1848:1848 \
-    --publish 1789:1789 \
+```bash
+docker run -d \
     --name chainweb-node \
-    chainweb-node-with-db \
-    /chainweb/run-chainweb-node.sh
+    --ulimit nofile=65536:65536 \
+    -p 8080:8080 \
+    -p 1848:1848 \
+    -p 1789:1789 \
+    -v chainweb-data:/data/chainweb-db \
+    runonflux/chainweb-node
 ```
 
-# Persistent the Chainweb database (outside of container)
+On first start, the database is downloaded automatically (~15 minutes depending on connection speed).
 
-When the Chainweb database is stored in the container it is lost when the
-container is deleted. This could, for instance, happen when a new version of
-Chainweb is released and the node is upgraded to the new version.
+### Flux Ports
 
-It is therefore recommended to store the Chainweb database outside the container
-on a docker volume (preferred method) or in the file system of the host system.
-
-```sh
-# 1. Get signed database snapshot URL (assuming you use get-chainweb-image-url.js form above)
-npm install aws-sdk
-YOUR_DB_SNAPSHOT_URL=$(node get-chainweb-image-url.js)
-
-# 2. Initialize a database that is persisted on a docker volume
-docker run -ti --rm \
-    --mount type=volume,source=chainweb-data,target=/data \
-    --env DBURL=$YOUR_DB_SNAPSHOT_URL \
-    kadena/chainweb-node \
-    /chainweb/initialize-db.sh
-
-# 3. Use the database volume with a Chainweb node
-docker run \
-    --detach \
-    --publish 1848:1848 \
-    --publish 1789:1789 \
+```bash
+docker run -d \
     --name chainweb-node \
-    --mount type=volume,source=chainweb-data,target=/data \
-    kadena/chainweb-node
+    --ulimit nofile=65536:65536 \
+    -p 31350:31350 \
+    -p 31351:31351 \
+    -p 31352:31352 \
+    -e DASHBOARD_PORT=31350 \
+    -e CHAINWEB_SERVICE_PORT=31351 \
+    -e CHAINWEB_P2P_PORT=31352 \
+    -v chainweb-data:/data/chainweb-db \
+    runonflux/chainweb-node
 ```
 
-Alternatively a bind mount can be used to persist the database in the file
-system of the host.
+## Ports
 
-# Enable Mining API
+| Port | Service |
+|------|---------|
+| 8080 (or 31350) | Dashboard |
+| 1848 (or 31351) | Service API |
+| 1789 (or 31352) | P2P |
 
-The private mining API is enabled by providing the public key of a miner as
-environment variable in the container using the `-e` option of Docker's `run`
-command. Optionally, the miner account name can be given, too. If the account
-name is omitted the public key is used as account name.
+## Environment Variables
 
-Only a single miner with a single is supported. The key predicate is `keys-all`.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DASHBOARD_PORT` | 8080 | Dashboard port |
+| `CHAINWEB_SERVICE_PORT` | 1848 | Service API port |
+| `CHAINWEB_P2P_PORT` | 1789 | P2P port |
+| `CHAINWEB_P2P_HOST` | 0.0.0.0 | P2P bind address |
+| `CHAINWEB_NETWORK` | mainnet01 | Network |
+| `LOGLEVEL` | warn | Log level |
+| `MINER_KEY` | - | Mining public key |
+| `MINER_ACCOUNT` | - | Mining account |
 
-The following example provides a public miner key and an account name:
+## Flux Deployment
 
-```sh
-docker run \
-    --detach \
-    --publish 1848:1848 \
-    --publish 1789:1789 \
-    --env "MINER_KEY=26a9285cd8db34702cfef27a5339179b5a26373f03dd94e2096b0b3ba6c417da" \
-    --env "MINER_ACCOUNT=merle" \
-    --name chainweb-node \
-    --mount type=volume,source=chainweb-data,target=/data \
-    kadena/chainweb-node
+1. Edit `flux-spec.json` and set your ZelID in the `owner` field
+2. Update `repotag` to your Docker Hub image
+3. Deploy via Flux
+
+Spec: 4 CPU, 4GB RAM, 80GB storage, ports 31350/31351/31352
+
+## Database
+
+Compacted snapshots are downloaded from chainweb-community.org via rsync. The startup script reads the RocksDB compaction height and configures `--initial-block-height-limit` automatically.
+
+To force re-download, delete `/data/chainweb-db` and restart the container.
+
+## API Endpoints
+
+**Service API (port 1848/31351)**
+- `GET /health-check`
+- `GET /info`
+- `GET /chainweb/0.0/mainnet01/cut`
+
+**Dashboard (port 8080/31350)**
+- Web interface
+- Proxies `/health-check`, `/info`, `/chainweb/*` to service API
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `Dockerfile` | Container build |
+| `start.sh` | Entrypoint |
+| `run-chainweb-node.sh` | Node startup |
+| `initialize-db.sh` | Database download |
+| `chainweb.yaml` | Node config |
+| `nginx.conf` | Reverse proxy |
+| `dashboard/index.html` | Web dashboard |
+| `flux-spec.json` | Flux deployment spec |
+| `check-health.sh` | Health check |
+
+## Build
+
+```bash
+docker build -t chainweb-node .
 ```
 
-Please refer to the official
-[chainweb-mining-client](https://github.com/kadena-io/chainweb-mining-client)
-for a further information of how to use the mining API to mine on Chainweb. The
-official reference implementation does not support mining devices that are
-powerful enough to competitively mine on the Kadena Mainnet. Links to alternate
-mining software can be found
-[here](https://kadena-io.github.io/kadena-docs/Public-Chain-Docs/#start-mining).
+## Links
 
-# API Overview
-
-TODO
-
-# Verifying database consistency
-
-TODO
-
-# Running the test suite
-
-TODO
-
-# Technical Details
-
-This Docker image runs a chainweb-node using the public IP address of the host
-with self-signed certificates. It supports a single mining key. For many use
-cases this is sufficient.
-
-For more complex production setups it is recommended to clone the repository,
-edit the configuration file within the Docker container, and create an custom
-image.
-
-When a public domain name is used instead of a domain name, we recommend to use
-docker compose to run [certbot]() in a different container and share the
-certificates using docker volumes.
-
-### Commands:
-
-* `/chainweb/run-chainweb-node.sh`
-* `/chainweb/initialize-db.sh`
-* `/chainweb/check-reachability.sh`
-* `/chainweb/check-health.sh`
-
-### File System
-
-*   Database directory: `/data/chainweb-db`
-*   Chainweb configuration file: `/chainweb/chainweb.mainnet01.yaml`
-
-### Available Configuration Options
-
-*   `CHAINWEB_P2P_PORT`: the network port that is used by the Chainweb P2P
-    network. The port that is used internally in the container *must* match the
-    port that is used publicly. A appropriate port mapping must be passed to the
-    `docker run` command, e.g. `-p 443:443`. (default: `1789`)
-
-*   `CHAINWEB_SERVICE_PORT`: the network port that is used by the Chainweb
-    REST Service API. The port that is used internally in the container *must* match
-    the port that is used publicly. A appropriate port mapping must be passed to
-    the `docker run` command, e.g. `-p 8000:8000`. (default: `80`)
-
-*   `CHAINWEB_BOOTSTRAP_NODE`: a Chainweb node that is used to check the
-    connectivity of the container before starting the node. (default:
-    `us-w1.chainweb.com`)
-
-*   `LOGLEVEL`: the log-level that is used by the Chainweb node.
-    Possible  values are `quiet`, `error`, `warn`, `info`, and `debug`.
-    The value `debug` should be avoid during normal production.
-    (default: `warn`).
-
-*   `CHAINWEB_P2P_HOST`: the public IP address of the node. (default: automatically
-    detected)
-
-*   `MINER_KEY`: the public key of the miner. If this is empty or unset
-    mining is disabled. Only a single key is supported with key predicate
-    `keys-all`.
-
-*   `MINER_ACCOUNT`: the mining account for the miner key. If unset or empty
-    the `MINER_KEY` is also used as account name.
-
-*   `ROSETTA`: Any non-empty value enables the
-    [Rosetta API](https://www.rosetta-api.org/) of the Chainweb node (default: disabled).
-
-*   TODO:
-    *    running a node with a DNS domain name
-    *    option for setting the block gas limit
-    *    option for enabled the header stream
-    *    explain how to overwrite the configuration file
-
-Options for `/chainweb/initialize-db.sh`
-
-*   `DBURL`: The URL from where the database snapshot is downloaded. We
-    recommend that users maintain there own database snapshots.
-
-Here is an example for how to use these settings:
-
-```sh
-docker run \
-    --detach \
-    --publish 8000:8000 \
-    --publish 1789:1789 \
-    --name chainweb-node \
-    --env "CHAINWEB_P2P_PORT=1789" \
-    --env "CHAINWEB_SERVICE_PORT=8000" \
-    --env "CHAINWEB_BOOTSTRAP_NODE=fr2.chainweb.com" \
-    --env "LOGLEVEL=warn" \
-    --env "MINER_KEY=774723b442c6ee660a0ac34747374fcd451591a123b35df5f4a69f1e9cb2cc75" \
-    --env "MINER_ACCOUNT=merle" \
-    --env "ROSETTA=1" \
-    --mount type=volume,source=chainweb-data,target=/data \
-    kadena/chainweb-node
-```
-
-### API Endpoints
-
-P2P API (inter-node communication)
-
-*   cut endpoint
-*   chain header endpoints
-*   chain payload endpoints
-*   chain mempool endpoints
-
-Service API
-
-*   Pact endpoints
-*   Mining endpoints
-*   Rosetta endpoints
-*   header-update-stream endpoint
-*   info endpoint
-*   health-check endpoint
+- [kda-community/chainweb-node](https://github.com/kda-community/chainweb-node)
+- [chainweb-community.org snapshots](https://snapshots.chainweb-community.org/)
+- [Kadena docs](https://docs.kadena.io/)
