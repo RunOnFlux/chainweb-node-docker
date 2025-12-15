@@ -25,11 +25,17 @@ get_snapshot_date() {
     echo "$today"
 }
 
-# Check if database already exists
-if [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ]; then
+# Check if database already exists and is complete
+if [ -f "$DBDIR/.download_complete" ] && [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ]; then
     echo "Database already exists at $DBDIR/0"
     echo "Delete /data/chainweb-db to re-download"
     exit 0
+fi
+
+# Clean up any partial/incomplete download
+if [ -d "$DBDIR/0" ] && [ ! -f "$DBDIR/.download_complete" ]; then
+    echo "Found incomplete database download, cleaning up..."
+    rm -rf "$DBDIR/0"
 fi
 
 echo "=== Chainweb Compacted Database Initialization ==="
@@ -76,13 +82,18 @@ else
 fi
 
 # Verify download
-if [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ]; then
+if [ -d "$DBDIR/0/rocksDb" ] && [ -d "$DBDIR/0/sqlite" ] && \
+   [ -f "$DBDIR/0/rocksDb/COMPACTION_HEIGHT" ] && [ -f "$DBDIR/0/sqlite/COMPACTION_HEIGHT" ]; then
     echo "=== Database initialization complete ==="
     echo "RocksDB size: $(du -sh $DBDIR/0/rocksDb 2>/dev/null | cut -f1)"
     echo "SQLite size: $(du -sh $DBDIR/0/sqlite 2>/dev/null | cut -f1)"
     echo "Total size: $(du -sh $DBDIR/0 2>/dev/null | cut -f1)"
+    # Create completion marker
+    echo "$(date -Iseconds)" > "$DBDIR/.download_complete"
 else
     echo "ERROR: Database initialization failed"
     echo "Expected directories $DBDIR/0/rocksDb and $DBDIR/0/sqlite not found"
+    # Clean up partial download
+    rm -rf "$DBDIR/0"
     exit 1
 fi
