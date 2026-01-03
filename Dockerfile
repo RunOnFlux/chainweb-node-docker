@@ -10,7 +10,7 @@ ARG UBUNTUVER=22.04
 FROM ubuntu:${UBUNTUVER}
 
 ARG REVISION=d7aee70
-ARG GHCVER=9.8.2
+ARG GHCVER=9.10.2
 ARG UBUNTUVER
 
 LABEL revision="$REVISION"
@@ -30,7 +30,7 @@ ENV LANG=en_US.UTF-8
 WORKDIR /chainweb
 # RUN curl -Ls "https://github.com/kadena-io/chainweb-node/releases/download/<chaineweb-version>/<chainweb-binary-version>" | tar -xzC "/chainweb/"
 # RUN curl -Ls "https://kadena-cabal-cache.s3.amazonaws.com/chainweb-node/chainweb.true.${GHCVER}.ubuntu-${UBUNTUVER}.${REVISION}.tar.gz" | tar -xzC "/"
-RUN curl -Ls "https://github.com/kda-community/chainweb-node/releases/download/3.0/chainweb-3.0.ghc-9.8.2.ubuntu-22.04.ade0394.tar.gz" | tar -xzC "/chainweb/"
+RUN curl -Ls "https://github.com/kda-community/chainweb-node/releases/download/3.1/chainweb-3.1.ghc-9.10.2.ubuntu-22.04.93bc86d.tar.gz" | tar -xzC "/chainweb/"
 
 COPY check-reachability.sh .
 COPY run-chainweb-node.sh .
